@@ -20,11 +20,6 @@ end
 ---@param opt table
 ---@return number
 local function validate_range(str, opt)
-    vim.validate({
-        str = { str, "string" },
-        opt = { opt, "table" },
-    })
-
     local res = {}
     for i, v in pairs(opt) do
         if i ~= "name" then
