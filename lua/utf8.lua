@@ -274,7 +274,7 @@ function utf8.offset(s, n, i)
             end
         end
     else
-        if i == #s or not next_char(s, i) then
+        if i ~= #s and not next_char(s, i) then
             error("initial position is a continuation byte", 2)
         end
 
