@@ -11,28 +11,23 @@ local lshift = bit.lshift
 ---The pattern, which matches exactly one UTF-8 byte sequence, assuming that the subject is a valid UTF-8 string.
 utf8.charpattern = "[%z\x01-\x7F\xC2-\xFD][\x80-\xBF]*"
 
-local function create_errmsg(idx, name, range_name)
-    return string.format("bad argument #%s to '%s' (%s out of range)", idx, name, range_name)
+---@param idx integer
+---@param func_name string
+---@param range_name string
+local function create_errmsg(idx, func_name, range_name)
+    return string.format("bad argument #%s to '%s' (%s out of range)", idx, func_name, range_name)
 end
 
 ---Converts indexes of a string to positive numbers.
 ---@param str string
----@param opt table
----@return number
-local function validate_range(str, opt)
-    local res = {}
-    for i, v in pairs(opt) do
-        if i ~= "name" then
-            local num = v.num
-            num = num > 0 and num or #str + num + 1
-            if num < 1 or num > #str then
-                local range_name = v.name and v.name .. " position" or "position"
-                error(create_errmsg(i, opt.name, range_name), 3)
-            end
-            table.insert(res, num)
-        end
+---@param idx integer
+---@return boolean, integer
+local function validate_range(str, idx)
+    idx = idx > 0 and idx or #str + idx + 1
+    if idx < 0 or idx > #str then
+        return false
     end
-    return unpack(res)
+    return true, idx
 end
 
 ---Receives zero or more integers, converts each one to its corresponding UTF-8 byte sequence
@@ -72,18 +67,9 @@ end
 
 ---Returns the next one character range.
 ---@param str string
----@param start_pos? number #default=1
+---@param start_pos number
 ---@return number start_pos, number end_pos
 local function next_char(str, start_pos)
-    vim.validate({
-        str = { str, "string" },
-        start_pos = { start_pos, "number", true },
-    })
-
-    start_pos = validate_range(str, {
-        name = "next_char",
-        [2] = { num = start_pos or 1 },
-    })
     local end_pos
 
     local b1 = str:byte(start_pos)
@@ -155,13 +141,15 @@ function utf8.codepoint(str, start_pos, end_pos)
         end_pos = { end_pos, "number", true },
     })
 
-    start_pos = start_pos or 1
-    end_pos = end_pos or start_pos
-    start_pos, end_pos = validate_range(str, {
-        name = "codepoint",
-        [2] = { name = "initial", num = start_pos },
-        [3] = { name = "final", num = end_pos },
-    })
+    local ok
+    ok, start_pos = validate_range(str, start_pos or 1)
+    if not ok then
+        error(create_errmsg(2, "codepoint", "initial potision"), 2)
+    end
+    ok, end_pos = validate_range(str, end_pos or start_pos)
+    if not ok then
+        error(create_errmsg(3, "codepoint", "final potision"), 2)
+    end
 
     local ret = {}
     repeat
@@ -211,11 +199,15 @@ function utf8.len(str, start_pos, end_pos)
         end_pos = { end_pos, "number", true },
     })
 
-    start_pos, end_pos = validate_range(str, {
-        name = "len",
-        [2] = { name = "initial", num = start_pos or 1 },
-        [3] = { name = "final", num = end_pos or -1 },
-    })
+    local ok
+    ok, start_pos = validate_range(str, start_pos or 1)
+    if not ok then
+        error(create_errmsg(2, "len", "initial potision"), 2)
+    end
+    ok, end_pos = validate_range(str, end_pos or -1)
+    if not ok then
+        error(create_errmsg(3, "len", "final potision"), 2)
+    end
 
     local len = 0
 
@@ -248,10 +240,11 @@ function utf8.offset(str, n, start_pos)
         start_pos = { start_pos, "number", true },
     })
 
-    start_pos = validate_range(str, {
-        name = "offset",
-        [3] = { num = start_pos or n >= 0 and 1 or #str },
-    })
+    local ok
+    ok, start_pos = validate_range(str, start_pos or n >= 0 and 1 or #str)
+    if not ok then
+        error(create_errmsg(3, "offset", "position"), 2)
+    end
 
     if n == 0 then
         for i = start_pos, 1, -1 do
