@@ -196,7 +196,7 @@ end
 ---@param s string
 ---@param i? integer #start position. default=1
 ---@param j? integer #end position. default=-1
----@return integer #Or false, integer
+---@return integer
 function utf8.len(s, i, j)
     vim.validate({
         s = { s, "string" },
@@ -219,7 +219,7 @@ function utf8.len(s, i, j)
     repeat
         local char_start, char_end = next_char(s, i)
         if char_start == nil then
-            return false, i
+            return nil, i
         end
 
         i = char_end + 1
@@ -238,7 +238,7 @@ end
 ---@param s string
 ---@param n integer
 ---@param i? integer #start position. if n >= 0, default=1, otherwise default=#s
----@return integer|boolean
+---@return integer
 function utf8.offset(s, n, i)
     vim.validate({
         s = { s, "string" },
@@ -288,8 +288,6 @@ function utf8.offset(s, n, i)
             end
         end
     end
-
-    return false
 end
 
 return utf8
