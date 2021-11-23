@@ -67,8 +67,8 @@ end
 
 ---Returns the next one character range.
 ---@param str string
----@param start_pos number
----@return number start_pos, number end_pos
+---@param start_pos integer
+---@return integer start_pos, integer end_pos
 local function next_char(str, start_pos)
     local end_pos
 
@@ -179,7 +179,6 @@ function utf8.codepoint(str, start_pos, end_pos)
             cp = bor(b1, cp)
             table.insert(ret, cp)
         end
-
     until char_end >= end_pos
 
     return unpack(ret)
@@ -260,27 +259,30 @@ function utf8.offset(str, n, start_pos)
         error("initial position is a continuation byte", 2)
     end
 
-    local find_start, find_end, find_step
     if n > 0 then
-        find_start = start_pos
-        find_end = #str
-        find_step = 1
+        for i = start_pos, #str do
+            local char_start = next_char(str, i)
+            if char_start then
+                n = n - 1
+                if n == 0 then
+                    return char_start
+                end
+            end
+        end
     else
         n = -n
-        find_start = start_pos
-        find_end = 1
-        find_step = -1
-    end
-
-    for i = find_start, find_end, find_step do
-        local char_start = next_char(str, i)
-        if char_start then
-            n = n - 1
-            if n == 0 then
-                return char_start
+        for i = start_pos, 1, -1 do
+            local char_start = next_char(str, i)
+            if char_start then
+                n = n - 1
+                if n == 0 then
+                    return char_start
+                end
             end
         end
     end
+
+    return false
 end
 
 return utf8
