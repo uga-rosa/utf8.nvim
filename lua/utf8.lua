@@ -66,13 +66,13 @@ function utf8.char(...)
 end
 
 ---Returns the next one character range.
----@param str string
+---@param s string
 ---@param start_pos integer
 ---@return integer start_pos, integer end_pos
-local function next_char(str, start_pos)
+local function next_char(s, start_pos)
     local end_pos
 
-    local b1 = str:byte(start_pos)
+    local b1 = s:byte(start_pos)
     if b1 <= 0x7F then
         -- single-byte
         return start_pos, start_pos
@@ -91,11 +91,11 @@ local function next_char(str, start_pos)
     end
 
     -- validate (end_pos)
-    if end_pos > #str then
+    if end_pos > #s then
         return
     end
     -- validate (continuation)
-    for _, bn in ipairs({ str:byte(start_pos + 1, end_pos) }) do
+    for _, bn in ipairs({ s:byte(start_pos + 1, end_pos) }) do
         if band(bn, 0xC0) ~= 0x80 then -- 10xx-xxxx?
             return
         end
@@ -105,81 +105,81 @@ local function next_char(str, start_pos)
 end
 
 ---Iterates over all UTF-8 characters in string str.
----@param str string
+---@param s string
 ---@return function iterator
-function utf8.codes(str)
+function utf8.codes(s)
     vim.validate({
-        str = { str, "string" },
+        s = { s, "string" },
     })
 
     local i = 1
     return function()
-        if i > #str then
+        if i > #s then
             return
         end
 
-        local start_pos, end_pos = next_char(str, i)
+        local start_pos, end_pos = next_char(s, i)
         if start_pos == nil then
             error("invalid UTF-8 code", 2)
         end
 
         i = end_pos + 1
-        return start_pos, str:sub(start_pos, end_pos)
+        return start_pos, s:sub(start_pos, end_pos)
     end
 end
 
 ---Returns the code points (as integers) from all characters in str
 ---that start between byte position start_pos and end_pos (both inclusive).
----@param str string
----@param start_pos? integer #default=1
----@param end_pos? integer #default=start_pos
+---@param s string
+---@param i? integer #start position. default=1
+---@param j? integer #end position. default=i
 ---@return integer #code point
-function utf8.codepoint(str, start_pos, end_pos)
+function utf8.codepoint(s, i, j)
     vim.validate({
-        str = { str, "string" },
-        start_pos = { start_pos, "number", true },
-        end_pos = { end_pos, "number", true },
+        s = { s, "string" },
+        i = { i, "number", true },
+        j = { j, "number", true },
     })
 
     local ok
-    ok, start_pos = validate_range(str, start_pos or 1)
+    ok, i = validate_range(s, i or 1)
     if not ok then
         error(create_errmsg(2, "codepoint", "initial potision"), 2)
     end
-    ok, end_pos = validate_range(str, end_pos or start_pos)
+    ok, j = validate_range(s, j or i)
     if not ok then
         error(create_errmsg(3, "codepoint", "final potision"), 2)
     end
 
     local ret = {}
     repeat
-        local char_start, char_end = next_char(str, start_pos)
+        local char_start, char_end = next_char(s, i)
         if char_start == nil then
             error("invalid UTF-8 code", 2)
         end
 
-        start_pos = char_end + 1
+        i = char_end + 1
 
         local len = char_end - char_start + 1
         if len == 1 then
             -- single-byte
-            table.insert(ret, str:byte(char_start))
+            table.insert(ret, s:byte(char_start))
         else
             -- multi-byte
-            local b1 = str:byte(char_start)
+            local b1 = s:byte(char_start)
             b1 = band(lshift(b1, len + 1), 0xFF) -- e.g. 110x-xxxx -> xxxx-x000
             b1 = lshift(b1, len * 5 - 7) -- >> len+1 and << (len-1)*6
 
             local cp = 0
-            for i = char_start + 1, char_end do
-                local bn = str:byte(i)
+            for k = char_start + 1, char_end do
+                local bn = s:byte(k)
                 cp = bor(lshift(cp, 6), band(bn, 0x3F))
             end
 
             cp = bor(b1, cp)
             table.insert(ret, cp)
         end
-    until char_end >= end_pos
+    until char_end >= j
 
     return unpack(ret)
 end
@@ -187,23 +187,23 @@ end
 ---Returns the number of UTF-8 characters in string str
 ---that start between start_pos and end_pos (both inclusive).
 ---If it finds any invalid byte sequence, returns false and the position of the first invalid byte.
----@param str string
----@param start_pos? integer #default=1
----@param end_pos? integer #default=-1
+---@param s string
+---@param i? integer #start position. default=1
+---@param j? integer #end position. default=-1
 ---@return integer #Or false, integer
-function utf8.len(str, start_pos, end_pos)
+function utf8.len(s, i, j)
     vim.validate({
-        str = { str, "string" },
-        start_pos = { start_pos, "number", true },
-        end_pos = { end_pos, "number", true },
+        s = { s, "string" },
+        i = { i, "number", true },
+        j = { j, "number", true },
     })
 
     local ok
-    ok, start_pos = validate_range(str, start_pos or 1)
+    ok, i = validate_range(s, i or 1)
     if not ok then
         error(create_errmsg(2, "len", "initial potision"), 2)
     end
-    ok, end_pos = validate_range(str, end_pos or -1)
+    ok, j = validate_range(s, j or -1)
     if not ok then
         error(create_errmsg(3, "len", "final potision"), 2)
     end
@@ -211,14 +211,14 @@ function utf8.len(str, start_pos, end_pos)
     local len = 0
 
     repeat
-        local char_start, char_end = next_char(str, start_pos)
+        local char_start, char_end = next_char(s, i)
         if char_start == nil then
-            return false, start_pos
+            return false, i
         end
 
-        start_pos = char_end + 1
+        i = char_end + 1
         len = len + 1
-    until char_end >= end_pos
+    until char_end >= j
 
     return len
 end
@@ -228,40 +228,40 @@ end
 ---If the specified character is neither in the subject nor right after its end, the function returns fail.
 ---
 ---As a special case, when n is 0 the function returns the start of the encoding of the character that contains the start_pos-th byte of str.
----@param str string
+---@param s string
 ---@param n integer
----@param start_pos? integer #if n > 0, default=1, else default=#str
----@return integer #Or false
-function utf8.offset(str, n, start_pos)
+---@param i? integer #start position. if n > 0, default=1, else default=#str
+---@return integer|boolean
+function utf8.offset(s, n, i)
     vim.validate({
-        str = { str, "string" },
+        s = { s, "string" },
         n = { n, "number" },
-        start_pos = { start_pos, "number", true },
+        i = { i, "number", true },
     })
 
     local ok
-    ok, start_pos = validate_range(str, start_pos or n >= 0 and 1 or #str)
+    ok, i = validate_range(s, i or n >= 0 and 1 or #s)
     if not ok then
         error(create_errmsg(3, "offset", "position"), 2)
     end
 
     if n == 0 then
-        for i = start_pos, 1, -1 do
-            local char_start = next_char(str, i)
+        for j = i, 1, -1 do
+            local char_start = next_char(s, j)
             if char_start then
                 return char_start
             end
         end
-        return
+        return false
     end
 
-    if not next_char(str, start_pos) then
+    if not next_char(s, i) then
         error("initial position is a continuation byte", 2)
     end
 
     if n > 0 then
-        for i = start_pos, #str do
-            local char_start = next_char(str, i)
+        for j = i, #s do
+            local char_start = next_char(s, j)
             if char_start then
                 n = n - 1
                 if n == 0 then
@@ -271,8 +271,8 @@ function utf8.offset(str, n, start_pos)
         end
     else
         n = -n
-        for i = start_pos, 1, -1 do
-            local char_start = next_char(str, i)
+        for j = i, 1, -1 do
+            local char_start = next_char(s, j)
             if char_start then
                 n = n - 1
                 if n == 0 then
