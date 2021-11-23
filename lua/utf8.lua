@@ -7,8 +7,8 @@ local bor = bit.bor
 local rshift = bit.rshift
 local lshift = bit.lshift
 
----Same as official
----The pattern, which matches exactly one UTF-8 byte sequence, assuming that the subject is a valid UTF-8 string.
+---The pattern (a string, not a function) "[\0-\x7F\xC2-\xFD][\x80-\xBF]*",
+---which matches exactly one UTF-8 byte sequence, assuming that the subject is a valid UTF-8 string.
 utf8.charpattern = "[%z\x01-\x7F\xC2-\xFD][\x80-\xBF]*"
 
 ---@param idx integer
@@ -104,7 +104,12 @@ local function next_char(s, start_pos)
     return start_pos, end_pos
 end
 
----Iterates over all UTF-8 characters in string str.
+---Returns values so that the construction
+---
+---for p, c in utf8.codes(s) do body end
+---
+---will iterate over all UTF-8 characters in string s, with p being the position (in bytes) and c the code point of each character.
+---It raises an error if it meets any invalid byte sequence.
 ---@param s string
 ---@return function iterator
 function utf8.codes(s)
@@ -128,8 +133,9 @@ function utf8.codes(s)
     end
 end
 
----Returns the code points (as integers) from all characters in str
----that start between byte position start_pos and end_pos (both inclusive).
+---Returns the code points (as integers) from all characters in s that start between byte position i and j (both included).
+---The default for i is 1 and for j is i.
+---It raises an error if it meets any invalid byte sequence.
 ---@param s string
 ---@param i? integer #start position. default=1
 ---@param j? integer #end position. default=i
@@ -184,9 +190,9 @@ function utf8.codepoint(s, i, j)
     return unpack(ret)
 end
 
----Returns the number of UTF-8 characters in string str
----that start between start_pos and end_pos (both inclusive).
----If it finds any invalid byte sequence, returns false and the position of the first invalid byte.
+---Returns the number of UTF-8 characters in string s that start between positions i and j (both inclusive).
+---The default for i is 1 and for j is -1.
+---If it finds any invalid byte sequence, returns fail plus the position of the first invalid byte.
 ---@param s string
 ---@param i? integer #start position. default=1
 ---@param j? integer #end position. default=-1
@@ -223,14 +229,15 @@ function utf8.len(s, i, j)
     return len
 end
 
----Returns the position (in bytes) where the encoding of the n-th character of s (counting from position start_pos) starts.
----A negative n gets characters before position start_pos. utf8.offset(s, -n) gets the offset of the n-th character from the end of the string.
+---Returns the position (in bytes) where the encoding of the n-th character of s (counting from position i) starts.
+---A negative n gets characters before position i.
+---The default for i is 1 when n is non-negative and #s otherwise, so that utf8.offset(s, -n) gets the offset of the n-th character from the end of the string.
 ---If the specified character is neither in the subject nor right after its end, the function returns fail.
 ---
----As a special case, when n is 0 the function returns the start of the encoding of the character that contains the start_pos-th byte of str.
+---As a special case, when n is 0 the function returns the start of the encoding of the character that contains the i-th byte of s.
 ---@param s string
 ---@param n integer
----@param i? integer #start position. if n > 0, default=1, else default=#str
+---@param i? integer #start position. if n >= 0, default=1, otherwise default=#s
 ---@return integer|boolean
 function utf8.offset(s, n, i)
     vim.validate({
@@ -252,14 +259,11 @@ function utf8.offset(s, n, i)
                 return char_start
             end
         end
-        return false
-    end
+    elseif n > 0 then
+        if not next_char(s, i) then
+            error("initial position is a continuation byte", 2)
+        end
 
-    if not next_char(s, i) then
-        error("initial position is a continuation byte", 2)
-    end
-
-    if n > 0 then
         for j = i, #s do
             local char_start = next_char(s, j)
             if char_start then
@@ -270,11 +274,14 @@ function utf8.offset(s, n, i)
             end
         end
     else
-        n = -n
+        if i == #s or not next_char(s, i) then
+            error("initial position is a continuation byte", 2)
+        end
+
         for j = i, 1, -1 do
             local char_start = next_char(s, j)
             if char_start then
-                n = n - 1
+                n = n + 1
                 if n == 0 then
                     return char_start
                 end
