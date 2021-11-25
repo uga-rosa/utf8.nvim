@@ -70,23 +70,22 @@ end
 ---@param start_pos integer
 ---@return integer start_pos, integer end_pos
 local function next_char(s, start_pos)
+    local b1 = s:byte(start_pos)
+    if not b1 then
+        return -- for offset's #s+1
+    end
+
     local end_pos
 
-    local b1 = s:byte(start_pos)
-    if b1 <= 0x7F then
-        -- single-byte
+    if band(b1, 0x80) == 0x00 then -- single-byte (0xxx-xxxx)
         return start_pos, start_pos
-    elseif b1 >= 0xC2 and b1 <= 0xDF then
-        -- two-byte
+    elseif 0xC2 <= b1 and b1 <= 0xDF then -- two-byte (range 0xC2 to 0xDF)
         end_pos = start_pos + 1
-    elseif b1 >= 0xE0 and b1 <= 0xEF then
-        -- three-byte
+    elseif band(b1, 0xF0) == 0xE0 then -- three-byte (1110-xxxx)
         end_pos = start_pos + 2
-    elseif b1 >= 0xF0 and b1 <= 0xF4 then
-        -- four-byte
+    elseif 0xF0 <= b1 and b1 <= 0xF4 then -- four-byte (range 0xF0 to 0xF4)
         end_pos = start_pos + 3
-    else
-        -- non first byte of multi-byte
+    else -- invalid 1st byte
         return
     end
 
@@ -231,13 +230,13 @@ end
 
 ---Returns the position (in bytes) where the encoding of the n-th character of s (counting from position i) starts.
 ---A negative n gets characters before position i.
----The default for i is 1 when n is non-negative and #s otherwise, so that utf8.offset(s, -n) gets the offset of the n-th character from the end of the string.
+---The default for i is 1 when n is non-negative and #s+1 otherwise, so that utf8.offset(s, -n) gets the offset of the n-th character from the end of the string.
 ---If the specified character is neither in the subject nor right after its end, the function returns fail.
 ---
 ---As a special case, when n is 0 the function returns the start of the encoding of the character that contains the i-th byte of s.
 ---@param s string
 ---@param n integer
----@param i? integer #start position. if n >= 0, default=1, otherwise default=#s
+---@param i? integer #start position. if n >= 0, default=1, otherwise default=#s+1
 ---@return integer
 function utf8.offset(s, n, i)
     vim.validate({
@@ -246,10 +245,14 @@ function utf8.offset(s, n, i)
         i = { i, "number", true },
     })
 
-    local ok
-    ok, i = validate_range(s, i or n >= 0 and 1 or #s)
-    if not ok then
-        error(create_errmsg(3, "offset", "position"), 2)
+    i = i or n >= 0 and 1 or #s + 1
+
+    if n >= 0 or i ~= #s + 1 then
+        local ok
+        ok, i = validate_range(s, i)
+        if not ok then
+            error(create_errmsg(3, "offset", "position"), 2)
+        end
     end
 
     if n == 0 then
@@ -274,7 +277,7 @@ function utf8.offset(s, n, i)
             end
         end
     else
-        if i ~= #s and not next_char(s, i) then
+        if i ~= #s + 1 and not next_char(s, i) then
             error("initial position is a continuation byte", 2)
         end
 
