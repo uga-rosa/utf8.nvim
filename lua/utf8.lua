@@ -7,9 +7,9 @@ local bor = bit.bor
 local rshift = bit.rshift
 local lshift = bit.lshift
 
----The pattern (a string, not a function) "[\0-\x7F\xC2-\xFD][\x80-\xBF]*",
+---The pattern (a string, not a function) "[\0-\x7F\xC2-\xF4][\x80-\xBF]*",
 ---which matches exactly one UTF-8 byte sequence, assuming that the subject is a valid UTF-8 string.
-utf8.charpattern = "[%z\x01-\x7F\xC2-\xFD][\x80-\xBF]*"
+utf8.charpattern = "[%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*"
 
 ---@param idx integer
 ---@param func_name string
