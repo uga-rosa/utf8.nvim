@@ -14,6 +14,7 @@ utf8.charpattern = "[%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*"
 ---@param idx integer
 ---@param func_name string
 ---@param range_name string
+---@return string @error message
 local function create_errmsg(idx, func_name, range_name)
     return string.format("bad argument #%s to '%s' (%s out of range)", idx, func_name, range_name)
 end
@@ -136,9 +137,9 @@ end
 ---The default for i is 1 and for j is i.
 ---It raises an error if it meets any invalid byte sequence.
 ---@param s string
----@param i? integer #start position. default=1
----@param j? integer #end position. default=i
----@return integer #code point
+---@param i? integer start position. default=1
+---@param j? integer end position. default=i
+---@return integer @code point
 function utf8.codepoint(s, i, j)
     vim.validate({
         s = { s, "string" },
@@ -193,8 +194,8 @@ end
 ---The default for i is 1 and for j is -1.
 ---If it finds any invalid byte sequence, returns fail plus the position of the first invalid byte.
 ---@param s string
----@param i? integer #start position. default=1
----@param j? integer #end position. default=-1
+---@param i? integer start position. default=1
+---@param j? integer end position. default=-1
 ---@return integer
 function utf8.len(s, i, j)
     vim.validate({
@@ -236,7 +237,7 @@ end
 ---As a special case, when n is 0 the function returns the start of the encoding of the character that contains the i-th byte of s.
 ---@param s string
 ---@param n integer
----@param i? integer #start position. if n >= 0, default=1, otherwise default=#s+1
+---@param i? integer start position. if n >= 0, default=1, otherwise default=#s+1
 ---@return integer
 function utf8.offset(s, n, i)
     vim.validate({
