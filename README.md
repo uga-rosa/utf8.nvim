@@ -2,6 +2,10 @@
 
 missing utf8 module for neovim Lua.
 
+The license for this library is CC0.
+Feel free to embed and use it.
+If you find any bugs, I'd appreciate it if you could let me know via PR.
+
 # Why?
 
 neovim's Lua is luajit (equivalent to Lua 5.1), so it does not have some of the libraries that recent Lua has.
