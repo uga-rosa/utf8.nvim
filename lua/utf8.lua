@@ -67,7 +67,15 @@ function utf8.char(...)
   return table.concat(buffer, "")
 end
 
+---@param b number bit
+---@return boolean
+local function is_tail(b)
+  -- 10xx-xxxx (0x80-BF)
+  return band(b, 0xC0) == 0x80
+end
+
 ---Returns the next one character range.
+---References: https://datatracker.ietf.org/doc/html/rfc3629#section-4
 ---@param s string
 ---@param start_pos integer
 ---@return integer? start_pos, integer? end_pos
@@ -76,33 +84,52 @@ local function next_char(s, start_pos)
   if not b1 then
     return -- for offset's #s+1
   end
+  local b2 = s:byte(start_pos + 1) or -1
+  local b3 = s:byte(start_pos + 2) or -1
+  local b4 = s:byte(start_pos + 3) or -1
 
-  local end_pos
-
-  if band(b1, 0x80) == 0x00 then -- single-byte (0xxx-xxxx)
+  -- single byte
+  if b1 <= 0x7F then
     return start_pos, start_pos
-  elseif 0xC2 <= b1 and b1 <= 0xDF then -- two-byte (range 0xC2 to 0xDF)
-    end_pos = start_pos + 1
-  elseif band(b1, 0xF0) == 0xE0 then -- three-byte (1110-xxxx)
-    end_pos = start_pos + 2
-  elseif 0xF0 <= b1 and b1 <= 0xF4 then -- four-byte (range 0xF0 to 0xF4)
-    end_pos = start_pos + 3
-  else -- invalid 1st byte
-    return
-  end
-
-  -- validate (end_pos)
-  if end_pos > #s then
-    return
-  end
-  -- validate (continuation)
-  for _, bn in ipairs({ s:byte(start_pos + 1, end_pos) }) do
-    if band(bn, 0xC0) ~= 0x80 then -- 10xx-xxxx?
-      return
+  -- two byte
+  elseif 0xC2 <= b1 and b1 <= 0xDF then
+    local end_pos = start_pos + 1
+    if is_tail(b2) then
+      return start_pos, end_pos
+    end
+  -- three byte
+  elseif 0xE0 <= b1 and b1 <= 0xEF then
+    local end_pos = start_pos + 2
+    if b1 == 0xE0 then
+      if (0xA0 <= b2 and b2 <= 0xBF) and is_tail(b3) then
+        return start_pos, end_pos
+      end
+    elseif b1 == 0xED then
+      if (0x80 <= b2 and b2 <= 0x9F) and is_tail(b3) then
+        return start_pos, end_pos
+      end
+    else
+      if is_tail(b2) and is_tail(b3) then
+        return start_pos, end_pos
+      end
+    end
+  -- four byte
+  elseif 0xF0 <= b1 and b1 <= 0xF4 then
+    local end_pos = start_pos + 3
+    if b1 == 0xF0 then
+      if (0x90 <= b2 and b2 <= 0xBF) and is_tail(b3) and is_tail(b4) then
+        return start_pos, end_pos
+      end
+    elseif b1 == 0xF4 then
+      if (0x80 <= b2 and b2 <= 0x8F) and is_tail(b3) and is_tail(b4) then
+        return start_pos, end_pos
+      end
+    else
+      if is_tail(b2) and is_tail(b3) and is_tail(b4) then
+        return start_pos, end_pos
+      end
     end
   end
-
-  return start_pos, end_pos
 end
 
 ---Returns values so that the construction
