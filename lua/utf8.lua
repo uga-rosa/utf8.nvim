@@ -11,27 +11,6 @@ local lshift = bit.lshift
 ---which matches exactly one UTF-8 byte sequence, assuming that the subject is a valid UTF-8 string.
 utf8.charpattern = "[%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*"
 
----@param idx integer
----@param func_name string
----@param range_name string
----@return string @error message
-local function create_errmsg(idx, func_name, range_name)
-  return string.format("bad argument #%s to '%s' (%s out of range)", idx, func_name, range_name)
-end
-
----Converts indexes of a string to positive numbers.
----@param str string
----@param idx integer
----@param msg string
----@return integer
-local function validate_range(str, idx, msg)
-  idx = idx > 0 and idx or #str + idx + 1
-  if idx < 0 or idx > #str then
-    error(msg, 2)
-  end
-  return idx
-end
-
 ---Receives zero or more integers, converts each one to its corresponding UTF-8 byte sequence
 ---and returns a string with the concatenation of all these sequences.
 ---@vararg integer
@@ -40,7 +19,7 @@ function utf8.char(...)
   local buffer = {}
   for i, v in ipairs({ ... }) do
     if v < 0 or v > 0x10FFFF then
-      error(create_errmsg(i, "char", "value"), 2)
+      error(("bad argument #%d to 'char' (value out of range)"):format(i))
     elseif v < 0x80 then
       -- single-byte
       buffer[i] = string.char(v)
@@ -78,7 +57,8 @@ end
 ---References: https://datatracker.ietf.org/doc/html/rfc3629#section-4
 ---@param s string
 ---@param start_pos integer
----@return integer? start_pos, integer? end_pos
+---@return integer? start_pos
+---@return integer? end_pos
 local function next_char(s, start_pos)
   local b1 = s:byte(start_pos)
   if not b1 then
@@ -161,43 +141,61 @@ function utf8.codes(s)
   end
 end
 
+---Normalize a index of a string to a positive number.
+---@param str string
+---@param idx integer
+---@return integer
+local function normalize_range(str, idx)
+  if idx > 0 then
+    return idx
+  else
+    return #str + idx + 1
+  end
+end
+
 ---Returns the code points (as integers) from all characters in s that start between byte position i and j (both included).
 ---The default for i is 1 and for j is i.
 ---It raises an error if it meets any invalid byte sequence.
 ---@param s string
 ---@param i? integer start position. default=1
 ---@param j? integer end position. default=i
----@return integer @code point
+---@return integer code point
 function utf8.codepoint(s, i, j)
   vim.validate({
     s = { s, "string" },
     i = { i, "number", true },
     j = { j, "number", true },
   })
-  i = validate_range(s, i or 1, create_errmsg(2, "codepoint", "initial position"))
-  j = validate_range(s, j or i, create_errmsg(3, "codepoint", "final position"))
+  i = normalize_range(s, i or 1)
+  if i < 1 then
+    error("bad argument #2 to 'codepoint' (out of bounds)")
+  end
+  j = normalize_range(s, j or i)
+  if j > #s then
+    error("bad argument #3 to 'codepoint' (out of bounds)")
+  end
 
   local ret = {}
   repeat
-    local char_start, char_end = next_char(s, i)
-    if char_start == nil then
-      error("invalid UTF-8 code", 2)
+    local start_pos, end_pos = next_char(s, i)
+    if start_pos == nil then
+      error("invalid UTF-8 code")
     end
 
-    i = char_end + 1
+    i = end_pos + 1
 
-    local len = char_end - char_start + 1
+    local len = end_pos - start_pos + 1
     if len == 1 then
       -- single-byte
-      table.insert(ret, s:byte(char_start))
+      table.insert(ret, s:byte(start_pos))
     else
       -- multi-byte
-      local b1 = s:byte(char_start)
+      local b1 = s:byte(start_pos)
       b1 = band(lshift(b1, len + 1), 0xFF) -- e.g. 110x-xxxx -> xxxx-x000
       b1 = lshift(b1, len * 5 - 7) -- >> len+1 and << (len-1)*6
 
       local cp = 0
-      for k = char_start + 1, char_end do
+      for k = start_pos + 1, end_pos do
         local bn = s:byte(k)
         cp = bor(lshift(cp, 6), band(bn, 0x3F))
       end
@@ -205,7 +203,7 @@ function utf8.codepoint(s, i, j)
       cp = bor(b1, cp)
       table.insert(ret, cp)
     end
-  until char_end >= j
+  until end_pos >= j
 
   return unpack(ret)
 end
@@ -224,20 +222,26 @@ function utf8.len(s, i, j)
     i = { i, "number", true },
     j = { j, "number", true },
   })
-  i = validate_range(s, i or 1, create_errmsg(2, "len", "initial position"))
-  j = validate_range(s, j or -1, create_errmsg(3, "len", "final position"))
+  i = normalize_range(s, i or 1)
+  if i < 1 or #s + 1 < i then
+    error("bad argument #2 to 'len' (initial position out of bounds)")
+  end
+  j = normalize_range(s, j or -1)
+  if j > #s then
+    error("bad argument #3 to 'len' (final position out of bounds)")
+  end
 
   local len = 0
 
   repeat
-    local char_start, char_end = next_char(s, i)
-    if char_start == nil then
+    local start_pos, end_pos = next_char(s, i)
+    if start_pos == nil then
       return nil, i
     end
 
-    i = char_end + 1
+    i = end_pos + 1
     len = len + 1
-  until char_end >= j
+  until end_pos >= j
 
   return len
 end
@@ -259,10 +263,13 @@ function utf8.offset(s, n, i)
     i = { i, "number", true },
   })
 
-  i = i or n >= 0 and 1 or #s + 1
+  i = i or (n >= 0 and 1 or #s + 1)
 
-  if n >= 0 or i ~= #s + 1 then
-    i = validate_range(s, i, create_errmsg(3, "offset", "position"))
+  if n >= 0 then
+    i = normalize_range(s, i)
+    if i <= 0 or #s + 1 <= i then
+      error("bad argument #3 to 'offset' (position out of bounds)")
+    end
   end
 
   if n == 0 then
@@ -272,33 +279,24 @@ function utf8.offset(s, n, i)
         return char_start
       end
     end
-  elseif n > 0 then
-    if not next_char(s, i) then
-      error("initial position is a continuation byte", 2)
-    end
-
-    for j = i, #s do
-      local char_start = next_char(s, j)
-      if char_start then
-        n = n - 1
-        if n == 0 then
-          return char_start
-        end
-      end
-    end
   else
-    if i ~= #s + 1 and not next_char(s, i) then
-      error("initial position is a continuation byte", 2)
+    if (n > 0 or i ~= #s + 1) and not next_char(s, i) then
+      error("initial position is a continuation byte")
     end
 
-    for j = i, 1, -1 do
-      local char_start = next_char(s, j)
-      if char_start then
-        n = n + 1
-        if n == 0 then
-          return char_start
-        end
+    local codes = {}
+    for p, c in utf8.codes(s) do
+      table.insert(codes, { p, c })
+      if i == p then
+        n = n + #codes - 1
       end
+    end
+    if i == #s + 1 then
+      n = n + #codes + 1
+    end
+
+    if codes[n] then
+      return codes[n][1]
     end
   end
 end
