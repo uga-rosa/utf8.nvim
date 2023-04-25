@@ -146,7 +146,7 @@ end
 ---@param idx integer
 ---@return integer
 local function normalize_range(str, idx)
-  if idx > 0 then
+  if idx >= 0 then
     return idx
   else
     return #str + idx + 1
@@ -214,7 +214,7 @@ end
 ---@param s string
 ---@param i? integer start position. default=1
 ---@param j? integer end position. default=-1
----@return integer | nil
+---@return integer?
 ---@return integer?
 function utf8.len(s, i, j)
   vim.validate({
@@ -273,31 +273,55 @@ function utf8.offset(s, n, i)
   end
 
   if n == 0 then
+    -- When n is 0, the function returns the start of the encoding of the character that contains the i-th byte of s.
     for j = i, 1, -1 do
-      local char_start = next_char(s, j)
-      if char_start then
-        return char_start
+      local start_pos = next_char(s, j)
+      if start_pos then
+        return start_pos
       end
     end
-  else
-    if (n > 0 or i ~= #s + 1) and not next_char(s, i) then
+  elseif n > 0 then
+    -- Returns the position (in bytes) where the encoding of the n-th character of s (counting from position i) starts.
+    if not next_char(s, i) then
       error("initial position is a continuation byte")
     end
 
+    local start_pos = i
+    -- `n == 1` expects to return i as is.
+    for _ = 1, n - 1 do
+      local _, end_pos = next_char(s, start_pos)
+      if not end_pos then
+        return
+      end
+      start_pos = end_pos + 1
+    end
+
+    return start_pos
+  else
+    -- A negative n gets characters before position i.
+    if i <= #s and not next_char(s, i) then
+      error("initial position is a continuation byte")
+    end
+
+    -- Array to store the start byte of the nth character.
     local codes = {}
-    for p, c in utf8.codes(s) do
-      table.insert(codes, { p, c })
+    for p, _ in utf8.codes(s) do
+      table.insert(codes, p)
       if i == p then
-        n = n + #codes - 1
+        -- #codes means how many character start bytes i is.
+        -- Therefore, this process makes n the number of the target character.
+        -- Note that in this case, `n == -1` refers to the character one before i shows.
+        n = n + #codes
+        break
       end
     end
     if i == #s + 1 then
+      -- When `i == #s+1`, find the -nth (n is negative number) character from end.
+      -- Note that in this case, `n == -1` means the starting byte of the end character of the string.
       n = n + #codes + 1
     end
 
-    if codes[n] then
-      return codes[n][1]
-    end
+    return codes[n]
   end
 end
 
