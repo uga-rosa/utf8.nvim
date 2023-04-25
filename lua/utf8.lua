@@ -62,7 +62,7 @@ end
 local function next_char(s, start_pos)
   local b1 = s:byte(start_pos)
   if not b1 then
-    return -- for offset's #s+1
+    return
   end
   local b2 = s:byte(start_pos + 1) or -1
   local b3 = s:byte(start_pos + 2) or -1
