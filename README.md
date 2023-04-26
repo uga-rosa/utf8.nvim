@@ -18,8 +18,10 @@ It does not provide any support for Unicode other than the handling of the encod
 
 # Functions
 
-The contents of the above reference manual are followed, except that `require()` is required.
+Functions are roughly equivalent to those of the above reference manual, except that `require()` is required.
 
 ```lua
 local utf8 = require("utf8")
 ```
+
+Check [doc](./doc/utf8.txt) for details.
