@@ -28,6 +28,11 @@ surrogates.
 ==============================================================================
 FUNCTIONS
 
+A Global variable is not added and must be called in `require()`.
+>lua
+	local utf8 = require("utf8")
+<
+
 								*utf8.char()*
 utf8.char([{int}...])
 	Receives zero or more integers, converts each one to its corresponding
