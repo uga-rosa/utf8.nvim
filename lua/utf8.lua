@@ -28,7 +28,7 @@ local function assertArgument(fun_name, arg_types)
     local arg, expected_type, optional = v[1], v[2], v[3]
     local got_type = type(arg)
     if not (got_type == expected_type or optional and arg == nil) then
-      error(msg:format(i, fun_name, expected_type, got_type))
+      error(msg:format(i, fun_name, expected_type, got_type), 2)
     end
   end
 end
