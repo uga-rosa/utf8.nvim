@@ -1,13 +1,15 @@
 # utf8.nvim
 
-The missing utf8 module for neovim Lua.
+The missing utf8 module for Neovim Lua.
 
 The license for this library is CC0.
 Feel free to embed and use it.
 
+It does not depend on Neovim, so it will work in environments where Luajit bit library are available.
+
 # Why?
 
-Neovim Lua runtime is luajit (equivalent to Lua 5.1), so it does not have some of the libraries that recent Lua has.
+Neovim Lua runtime is Luajit (equivalent to Lua 5.1), so it does not have some of the libraries that recent Lua has.
 
 # What is this?
 
